@@ -33,6 +33,7 @@
 
 // Private variables
 static ATTITUDE_INFO m_att;
+static float rot[4], rot_inv[4];
 static float m_accel[3], m_gyro[3], m_mag[3];
 static stkalign_t m_thd_work_area[THD_WORKING_AREA_SIZE(2048) / sizeof(stkalign_t)];
 static i2c_bb_state m_i2c_bb;
@@ -218,6 +219,22 @@ void imu_get_quaternions(float *q) {
 	q[3] = m_att.q3;
 }
 
+void multiply_quaternions(float *q1, float *q2, float *result){
+	float a = (q1[0] + q1[1])*(q2[0] + q2[1]);
+	float b = (q1[3] - q1[2])*(q2[2] - q2[3]);
+	float c = (q1[0] - q1[1])*(q2[2] + q2[3]);
+	float d = (q1[2] + q1[3])*(q2[0] - q2[1]);
+	float e = (q1[1] + q1[3])*(q2[1] + q2[2]);
+	float f = (q1[1] - q1[3])*(q2[1] - q2[2]);
+	float g = (q1[0] + q1[2])*(q2[0] - q2[3]);
+	float h = (q1[0] - q1[2])*(q2[0] + q2[3]);
+
+	result[0] = b + (-e - f + g + h) /2;
+	result[1] = a - (e + f + g + h)/2;
+	result[2] = c + (e - f + g - h)/2;
+	result[3] = d + (e - f - g + h)/2;
+}
+
 static void imu_read_callback(float *accel, float *gyro, float *mag) {
 	static uint32_t last_time = 0;
 	float dt = timer_seconds_elapsed_since(last_time);
@@ -242,29 +259,79 @@ static void imu_read_callback(float *accel, float *gyro, float *mag) {
 #endif
 
 	// Rotate axes (ZYX)
+	if (m_settings.mode == AHRS_MODE_MADGWICK){
+		float s1 = sinf(m_settings.rot_yaw * M_PI / 180.0);
+		float c1 = cosf(m_settings.rot_yaw * M_PI / 180.0);
+		float s2 = sinf(m_settings.rot_pitch * M_PI / 180.0);
+		float c2 = cosf(m_settings.rot_pitch * M_PI / 180.0);
+		float s3 = sinf(m_settings.rot_roll * M_PI / 180.0);
+		float c3 = cosf(m_settings.rot_roll * M_PI / 180.0);
 
-	float s1 = sinf(m_settings.rot_yaw * M_PI / 180.0);
-	float c1 = cosf(m_settings.rot_yaw * M_PI / 180.0);
-	float s2 = sinf(m_settings.rot_pitch * M_PI / 180.0);
-	float c2 = cosf(m_settings.rot_pitch * M_PI / 180.0);
-	float s3 = sinf(m_settings.rot_roll * M_PI / 180.0);
-	float c3 = cosf(m_settings.rot_roll * M_PI / 180.0);
+		float m11 = c1 * c2;	float m12 = c1 * s2 * s3 - c3 * s1;	float m13 = s1 * s3 + c1 * c3 * s2;
+		float m21 = c2 * s1;	float m22 = c1 * c3 + s1 * s2 * s3;	float m23 = c3 * s1 * s2 - c1 * s3;
+		float m31 = -s2; 		float m32 = c2 * s3;				float m33 = c2 * c3;
 
-	float m11 = c1 * c2;	float m12 = c1 * s2 * s3 - c3 * s1;	float m13 = s1 * s3 + c1 * c3 * s2;
-	float m21 = c2 * s1;	float m22 = c1 * c3 + s1 * s2 * s3;	float m23 = c3 * s1 * s2 - c1 * s3;
-	float m31 = -s2; 		float m32 = c2 * s3;				float m33 = c2 * c3;
+		m_accel[0] = accel[0] * m11 + accel[1] * m12 + accel[2] * m13;
+		m_accel[1] = accel[0] * m21 + accel[1] * m22 + accel[2] * m23;
+		m_accel[2] = accel[0] * m31 + accel[1] * m32 + accel[2] * m33;
 
-	m_accel[0] = accel[0] * m11 + accel[1] * m12 + accel[2] * m13;
-	m_accel[1] = accel[0] * m21 + accel[1] * m22 + accel[2] * m23;
-	m_accel[2] = accel[0] * m31 + accel[1] * m32 + accel[2] * m33;
+		m_gyro[0] = gyro[0] * m11 + gyro[1] * m12 + gyro[2] * m13;
+		m_gyro[1] = gyro[0] * m21 + gyro[1] * m22 + gyro[2] * m23;
+		m_gyro[2] = gyro[0] * m31 + gyro[1] * m32 + gyro[2] * m33;
 
-	m_gyro[0] = gyro[0] * m11 + gyro[1] * m12 + gyro[2] * m13;
-	m_gyro[1] = gyro[0] * m21 + gyro[1] * m22 + gyro[2] * m23;
-	m_gyro[2] = gyro[0] * m31 + gyro[1] * m32 + gyro[2] * m33;
+		m_mag[0] = mag[0] * m11 + mag[1] * m12 + mag[2] * m13;
+		m_mag[1] = mag[0] * m21 + mag[1] * m22 + mag[2] * m23;
+		m_mag[2] = mag[0] * m31 + mag[1] * m32 + mag[2] * m33;
+	} else {
 
-	m_mag[0] = mag[0] * m11 + mag[1] * m12 + mag[2] * m13;
-	m_mag[1] = mag[0] * m21 + mag[1] * m22 + mag[2] * m23;
-	m_mag[2] = mag[0] * m31 + mag[1] * m32 + mag[2] * m33;
+		// calculate trig identities
+		float cr = cosf((m_settings.rot_roll * (M_PI / 180.0)) /2.0);
+		float cp = cosf((m_settings.rot_pitch * (M_PI / 180.0)) /2.0);
+		float cy = cosf((m_settings.rot_yaw * (M_PI / 180.0)) /2.0);
+		float sr = sinf((m_settings.rot_roll * (M_PI / 180.0)) /2.0);
+		float sp = sinf((m_settings.rot_pitch * (M_PI / 180.0)) /2.0);
+		float sy = sinf((m_settings.rot_yaw * (M_PI / 180.0)) /2.0);
+		float cpcy = cp * cy;
+		float spsy = sp * sy;
+
+		rot[0] = (cr * cpcy) + (sr * spsy);
+		rot[1] = sr * cpcy - cr * spsy;
+		rot[2] =  cr * sp * cy + sr * cp * sy;
+		rot[3] =  cr * cp * sy - sr * sp * cy;
+		rot_inv[0] = rot[0];
+		rot_inv[1] = -rot[1];
+		rot_inv[2] = -rot[2];
+		rot_inv[3] = -rot[3];
+
+		float quat[4];
+		quat[0] = 0;
+		quat[1] = accel[0];
+		quat[2] = accel[1];
+		quat[3] = accel[2];
+
+		multiply_quaternions(rot, quat, quat);
+		multiply_quaternions(quat, rot_inv, quat);
+
+		m_accel[0] = quat[1];
+		m_accel[1] = quat[2];
+		m_accel[2] = quat[3];
+
+		quat[1] = gyro[0];
+		quat[2] = gyro[1];
+		quat[3] = gyro[2];
+
+		multiply_quaternions(rot, quat, quat);
+		multiply_quaternions(quat, rot_inv, quat);
+
+		m_gyro[0] = quat[1];
+		m_gyro[1] = quat[2];
+		m_gyro[2] = quat[3];
+
+		m_mag[0] = mag[0];
+		m_mag[1] = mag[1];
+		m_mag[2] = mag[2];
+
+	}
 
 	// Accelerometer and Gyro offset compensation and estimation
 	for (int i = 0;i < 3;i++) {
