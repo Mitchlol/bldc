@@ -27,13 +27,9 @@
 #define HW_HAS_3_SHUNTS
 
 // Macros
-#ifdef HW60_VEDDER_FIRST_PCB
-#define ENABLE_GATE()			palSetPad(GPIOB, 6)
-#define DISABLE_GATE()			palClearPad(GPIOB, 6)
-#else
 #define ENABLE_GATE()			palSetPad(GPIOB, 5)
 #define DISABLE_GATE()			palClearPad(GPIOB, 5)
-#endif
+
 #define DCCAL_ON()
 #define DCCAL_OFF()
 #define IS_DRV_FAULT()			(!palReadPad(GPIOB, 7))
@@ -107,7 +103,7 @@
 #define VIN_R2					2200.0
 #endif
 #ifndef CURRENT_AMP_GAIN
-#define CURRENT_AMP_GAIN		20
+#define CURRENT_AMP_GAIN		10
 #endif
 #ifndef CURRENT_SHUNT_RES
 #define CURRENT_SHUNT_RES		0.0005

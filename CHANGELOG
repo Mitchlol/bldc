@@ -1,4 +1,4 @@
-=== FW 5.02 <dev> ===
+=== FW 5.02 ===
 * IMU calibration improvement.
 * Added COMM_GET_MCCONF_TEMP command.
 * Added bidirectional current command to VESC remote.
@@ -27,6 +27,7 @@
 * Added modulation-based D axis current controller gain scaling. Addresses https://github.com/vedderb/bldc/pull/220
 * Added PAS app. See: https://github.com/vedderb/bldc/pull/243
 * Added 100k CAN-baudrate.
+* Added 100k NTC temperature sensor support.
 
 === FW 5.01 ===
 * Fixed PPM bug in previous release.

@@ -221,6 +221,7 @@ INCDIR = $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
 MCU  = cortex-m4
 
 #TRGT = arm-elf-
+#TRGT = /home/benjamin/Nextcloud/appimage/gcc-arm-none-eabi-7-2018-q2-update/bin/arm-none-eabi-
 TRGT = arm-none-eabi-
 CC   = $(TRGT)gcc
 CPPC = $(TRGT)g++
@@ -283,6 +284,9 @@ ifeq ($(USE_FWLIB),yes)
   USE_OPT += -DUSE_STDPERIPH_DRIVER
 endif
 
+RULESPATH = $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC
+include $(RULESPATH)/rules.mk
+
 build/$(PROJECT).bin: build/$(PROJECT).elf 
 	$(BIN) build/$(PROJECT).elf build/$(PROJECT).bin --gap-fill 0xFF
 
@@ -308,6 +312,3 @@ upload-pi-remote: build/$(PROJECT).elf
 
 debug-start:
 	openocd -f stm32-bv_openocd.cfg
-
-RULESPATH = $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC
-include $(RULESPATH)/rules.mk
